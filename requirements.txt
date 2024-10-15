@@ -1,4 +1,3 @@
-matplotlib
 dash
 nltk
 stopwords
@@ -8,3 +7,4 @@ ipykernel
 tensorflow>=2.10.0
 scikit-learn
 streamlit
+matplotlib

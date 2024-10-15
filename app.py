@@ -1,128 +1,128 @@
 import streamlit as st
+from sklearn.cluster import KMeans
+from sklearn.preprocessing import StandardScaler, LabelEncoder
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
-import re
-import numpy as np
-# import os
-# os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
-from tensorflow.keras.models import load_model
-from tensorflow.keras.preprocessing.text import Tokenizer
-from tensorflow.keras.preprocessing.sequence import pad_sequences
-from sklearn.preprocessing import MinMaxScaler
 
-# Load the dataset
-df = pd.read_csv('df.csv')  # Replace with your dataset path
+# Example dataframe (replace with actual dataframe)
+df = pd.DataFrame({
+    'cvssv3': [9.8, 7.5, 7.5, 9.8, 5.5, 6.0, 4.0, 3.5, 8.0, 2.0],
+    'attackvector': ['NETWORK', 'NETWORK', 'NETWORK', 'NETWORK', 'LOCAL', 'LOCAL', 'PHYSICAL', 'PHYSICAL', 'ADJACENT', 'ADJACENT'],
+    'attackcomplexity': ['LOW', 'LOW', 'LOW', 'LOW', 'LOW', 'HIGH', 'HIGH', 'HIGH', 'LOW', 'LOW'],
+    'privilegesrequired': ['NONE', 'NONE', 'NONE', 'NONE', 'LOW', 'LOW', 'HIGH', 'HIGH', 'NONE', 'NONE'],
+    'userinteraction': ['NONE', 'NONE', 'NONE', 'NONE', 'NONE', 'REQUIRED', 'REQUIRED', 'REQUIRED', 'NONE', 'NONE'],
+    'scope': ['UNCHANGED', 'UNCHANGED', 'UNCHANGED', 'UNCHANGED', 'UNCHANGED', 'CHANGED', 'CHANGED', 'CHANGED', 'UNCHANGED', 'UNCHANGED'],
+    'confidentialityimpact': ['HIGH', 'HIGH', 'HIGH', 'HIGH', 'NONE', 'LOW', 'LOW', 'LOW', 'HIGH', 'HIGH'],
+    'integrityimpact': ['HIGH', 'NONE', 'NONE', 'HIGH', 'NONE', 'LOW', 'LOW', 'LOW', 'HIGH', 'HIGH'],
+    'availabilityimpact': ['HIGH', 'NONE', 'NONE', 'HIGH', 'HIGH', 'LOW', 'LOW', 'LOW', 'HIGH', 'HIGH']
+})
 
-# Load the trained model
-model = load_model('lstm_threat_model.h5')
+# Select the features used in the base dataset
+features = ['cvssv3', 'attackvector', 'attackcomplexity', 'privilegesrequired', 'userinteraction', 'scope', 'confidentialityimpact', 'integrityimpact', 'availabilityimpact']
 
-# Text preprocessing function (same as used during training)
-def preprocess_text(text):
-    text = text.lower()
-    text = re.sub(r'\d+', '', text)
-    text = re.sub(r'\s+', ' ', text).strip()
-    return text
+# Define all possible values for each categorical feature
+possible_values = {
+    'attackvector': ['NETWORK', 'ADJACENT', 'LOCAL', 'PHYSICAL'],
+    'attackcomplexity': ['LOW', 'HIGH'],
+    'privilegesrequired': ['NONE', 'LOW', 'HIGH'],
+    'userinteraction': ['NONE', 'REQUIRED'],
+    'scope': ['UNCHANGED', 'CHANGED'],
+    'confidentialityimpact': ['NONE', 'LOW', 'HIGH'],
+    'integrityimpact': ['NONE', 'LOW', 'HIGH'],
+    'availabilityimpact': ['NONE', 'LOW', 'HIGH']
+}
+
+# Encode categorical features
+label_encoders = {}
+for feature in features:
+    if df[feature].dtype == 'object':
+        le = LabelEncoder()
+        le.fit(possible_values[feature])
+        df[feature] = le.transform(df[feature])
+        label_encoders[feature] = le
+
+# Standardize the features
+scaler = StandardScaler()
+X_scaled = scaler.fit_transform(df[features])
+
+# Fit the KMeans model
+kmeans = KMeans(n_clusters=5, random_state=42)  # Adjusted n_clusters to match the sample size
+df['predicted_bin'] = kmeans.fit_predict(X_scaled) + 1  # Adjust bin range to be from 1 to 10
+
+# Function to predict the bin for new data
+def predict_bin(new_data):
+    for feature in features:
+        if feature in label_encoders:
+            new_data[feature] = label_encoders[feature].transform(new_data[feature])
+    new_data_scaled = scaler.transform(new_data[features])
+    return kmeans.predict(new_data_scaled) + 1  # Adjust bin range to be from 1 to 10
 
 # Streamlit app
-st.title("Dataset Visualizations and Threat Score Prediction")
+st.title("KMeans Clustering Prediction and Data Visualization")
 
-# Display the first few rows of the dataset
-st.header("Dataset Overview")
-st.write(df.head())
+# Take user input for the feature values
+user_input = {}
+user_input['report'] = st.text_area("Enter report:")  # Add a text area for the report
+user_input['cvssv3'] = st.number_input("Enter value for cvssv3:", min_value=0.0, max_value=10.0, step=0.1)
+user_input['attackvector'] = st.selectbox("Select value for attackvector:", possible_values['attackvector'])
+user_input['attackcomplexity'] = st.selectbox("Select value for attackcomplexity:", possible_values['attackcomplexity'])
+user_input['privilegesrequired'] = st.selectbox("Select value for privilegesrequired:", possible_values['privilegesrequired'])
+user_input['userinteraction'] = st.selectbox("Select value for userinteraction:", possible_values['userinteraction'])
+user_input['scope'] = st.selectbox("Select value for scope:", possible_values['scope'])
+user_input['confidentialityimpact'] = st.selectbox("Select value for confidentialityimpact:", possible_values['confidentialityimpact'])
+user_input['integrityimpact'] = st.selectbox("Select value for integrityimpact:", possible_values['integrityimpact'])
+user_input['availabilityimpact'] = st.selectbox("Select value for availabilityimpact:", possible_values['availabilityimpact'])
 
-# Sidebar for selecting visualization
-st.sidebar.header("Select Visualization")
-visualization_type = st.sidebar.selectbox(
-    "Choose a visualization type",
-    ["Basic Statistics", "Histograms", "Scatter Plots", "Correlation Matrix", "Pairplot", "Box Plots", "Bar Plots"]
-)
+# Convert user input to DataFrame
+new_data = pd.DataFrame([user_input])
 
-# Display the selected visualization
-if visualization_type == "Basic Statistics":
-    st.header("Basic Statistics")
-    st.write(df.describe())
+# Remove the 'report' column from new_data before prediction
+new_data = new_data.drop(columns=['report'])
 
-elif visualization_type == "Histograms":
-    st.header("Histograms")
-    numerical_columns = df.select_dtypes(include=['float64', 'int64']).columns
-    selected_column = st.sidebar.selectbox("Select Column", numerical_columns)
-    st.subheader(f"Histogram for {selected_column}")
-    fig, ax = plt.subplots()
-    sns.histplot(df[selected_column], bins=20, kde=True, ax=ax)
-    st.pyplot(fig)
+# Predict the bin for the user input
+if st.button("Predict Threat score level"):
+    predicted_bins = predict_bin(new_data)
+    st.write(f"Predicted Threat score level: {predicted_bins[0]}")
 
-elif visualization_type == "Scatter Plots":
-    st.header("Scatter Plots")
-    numerical_columns = df.select_dtypes(include=['float64', 'int64']).columns
-    selected_column = st.sidebar.selectbox("Select Column", numerical_columns)
-    if selected_column != 'threat_score_normalized':  # Avoid plotting threat_score_normalized against itself
-        st.subheader(f"Scatter Plot: threat_score_normalized vs {selected_column}")
+# Load the new dataset for visualization
+@st.cache_data
+def load_data(url):
+    return pd.read_csv(url)
+
+# URL to the dataset (replace with the actual URL)
+data_url = 'df.csv'  # Replace with the actual URL to your dataset
+
+df_new = load_data(data_url)
+
+# Sidebar for plot selection
+st.sidebar.title("Visualization Options")
+plot_type = st.sidebar.selectbox("Select plot type:", ["Histogram", "Correlation Heatmap", "Pair Plot"])
+selected_columns = st.sidebar.multiselect("Select columns to visualize:", df_new.columns.tolist())
+
+# Display the selected plot
+if plot_type == "Histogram":
+    st.header("Histogram")
+    for col in selected_columns:
+        st.subheader(f"Histogram for {col}")
         fig, ax = plt.subplots()
-        sns.scatterplot(x=df[selected_column], y=df['threat_score_normalized'], ax=ax)
+        sns.histplot(df_new[col], kde=True, ax=ax)
         st.pyplot(fig)
 
-elif visualization_type == "Correlation Matrix":
-    st.header("Correlation Matrix")
-    numerical_columns = df.select_dtypes(include=['float64', 'int64']).columns
-    fig, ax = plt.subplots()
-    sns.heatmap(df[numerical_columns].corr(), annot=True, cmap='coolwarm', ax=ax)
-    st.pyplot(fig)
-
-elif visualization_type == "Pairplot":
-    st.header("Pairplot")
-    numerical_columns = df.select_dtypes(include=['float64', 'int64']).columns
-    selected_columns = st.sidebar.multiselect("Select Columns", numerical_columns, default=numerical_columns)
-    if selected_columns:
-        fig = sns.pairplot(df[selected_columns])
+elif plot_type == "Correlation Heatmap":
+    st.header("Correlation Heatmap")
+    if len(selected_columns) > 1:
+        fig, ax = plt.subplots()
+        corr = df_new[selected_columns].corr()
+        sns.heatmap(corr, annot=True, cmap='coolwarm', ax=ax)
         st.pyplot(fig)
+    else:
+        st.warning("Please select at least two columns for the correlation heatmap.")
 
-elif visualization_type == "Box Plots":
-    st.header("Box Plots")
-    categorical_columns = df.select_dtypes(include=['object']).columns
-    selected_column = st.sidebar.selectbox("Select Column", categorical_columns)
-    st.subheader(f"Box Plot: threat_score_normalized vs {selected_column}")
-    fig, ax = plt.subplots()
-    sns.boxplot(x=df[selected_column], y=df['threat_score_normalized'], ax=ax)
-    st.pyplot(fig)
-
-elif visualization_type == "Bar Plots":
-    st.header("Bar Plots")
-    categorical_columns = df.select_dtypes(include=['object']).columns
-    selected_column = st.sidebar.selectbox("Select Column", categorical_columns)
-    st.subheader(f"Bar Plot: {selected_column}")
-    fig, ax = plt.subplots()
-    sns.countplot(x=df[selected_column], ax=ax)
-    st.pyplot(fig)
-
-# Sidebar for threat score prediction
-st.sidebar.header("Predict Threat Score")
-new_report = st.sidebar.text_area("Report Text", "This is a new report text that needs to be preprocessed.")
-new_complexity_score = st.sidebar.slider("Complexity Score", 0.0, 1.0, 0.7)
-new_prevalence_score = st.sidebar.slider("Prevalence Score", 0.0, 1.0, 0.5)
-
-if st.sidebar.button("Predict"):
-    # Preprocess the new report text
-    new_report = preprocess_text(new_report)
-
-    # Tokenize and pad the new report text
-    tokenizer = Tokenizer(num_words=5000)
-    # Assuming the tokenizer was fitted on the training data
-    tokenizer.fit_on_texts(df['report'])  # Use the same tokenizer as during training
-    new_sequence = tokenizer.texts_to_sequences([new_report])
-    new_padded_sequence = pad_sequences(new_sequence, maxlen=100)
-
-    # Normalize the new input scores
-    scaler = MinMaxScaler()
-    # Assuming the scaler was fitted on the training data
-    scaler.fit(df[['complexity_score', 'prevalence_score']])  # Use the same scaler as during training
-    new_scores = scaler.transform([[new_complexity_score, new_prevalence_score]])
-
-    # Prepare the input data for the model
-    X_text_new = new_padded_sequence
-    X_scores_new = new_scores
-
-    # Make the prediction
-    predicted_threat_score = model.predict([X_text_new, X_scores_new])
-
-    st.sidebar.write("Predicted Threat Score:", predicted_threat_score[0][0])
+elif plot_type == "Pair Plot":
+    st.header("Pair Plot")
+    if len(selected_columns) > 1:
+        fig = sns.pairplot(df_new[selected_columns])
+        st.pyplot(fig)
+    else:
+        st.warning("Please select at least two columns for the pair plot.")
