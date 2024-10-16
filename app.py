@@ -5,58 +5,36 @@ import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
 
-# Example dataframe (replace with actual dataframe)
-df = pd.DataFrame({
-    'cvssv3': [9.8, 7.5, 7.5, 9.8, 5.5, 6.0, 4.0, 3.5, 8.0, 2.0],
-    'attackvector': ['NETWORK', 'NETWORK', 'NETWORK', 'NETWORK', 'LOCAL', 'LOCAL', 'PHYSICAL', 'PHYSICAL', 'ADJACENT', 'ADJACENT'],
-    'attackcomplexity': ['LOW', 'LOW', 'LOW', 'LOW', 'LOW', 'HIGH', 'HIGH', 'HIGH', 'LOW', 'LOW'],
-    'privilegesrequired': ['NONE', 'NONE', 'NONE', 'NONE', 'LOW', 'LOW', 'HIGH', 'HIGH', 'NONE', 'NONE'],
-    'userinteraction': ['NONE', 'NONE', 'NONE', 'NONE', 'NONE', 'REQUIRED', 'REQUIRED', 'REQUIRED', 'NONE', 'NONE'],
-    'scope': ['UNCHANGED', 'UNCHANGED', 'UNCHANGED', 'UNCHANGED', 'UNCHANGED', 'CHANGED', 'CHANGED', 'CHANGED', 'UNCHANGED', 'UNCHANGED'],
-    'confidentialityimpact': ['HIGH', 'HIGH', 'HIGH', 'HIGH', 'NONE', 'LOW', 'LOW', 'LOW', 'HIGH', 'HIGH'],
-    'integrityimpact': ['HIGH', 'NONE', 'NONE', 'HIGH', 'NONE', 'LOW', 'LOW', 'LOW', 'HIGH', 'HIGH'],
-    'availabilityimpact': ['HIGH', 'NONE', 'NONE', 'HIGH', 'HIGH', 'LOW', 'LOW', 'LOW', 'HIGH', 'HIGH']
-})
+# Load the new dataset for clustering and visualization
+@st.cache_data
+def load_data(url):
+    return pd.read_csv(url)
+
+# URL to the dataset (replace with the actual URL)
+data_url = 'df.csv'  # Replace with the actual URL to your dataset
+
+df = load_data(data_url)
 
 # Select the features used in the base dataset
 features = ['cvssv3', 'attackvector', 'attackcomplexity', 'privilegesrequired', 'userinteraction', 'scope', 'confidentialityimpact', 'integrityimpact', 'availabilityimpact']
-
-# Define all possible values for each categorical feature
-possible_values = {
-    'attackvector': ['NETWORK', 'ADJACENT', 'LOCAL', 'PHYSICAL'],
-    'attackcomplexity': ['LOW', 'HIGH'],
-    'privilegesrequired': ['NONE', 'LOW', 'HIGH'],
-    'userinteraction': ['NONE', 'REQUIRED'],
-    'scope': ['UNCHANGED', 'CHANGED'],
-    'confidentialityimpact': ['NONE', 'LOW', 'HIGH'],
-    'integrityimpact': ['NONE', 'LOW', 'HIGH'],
-    'availabilityimpact': ['NONE', 'LOW', 'HIGH']
-}
-
-# Encode categorical features
-label_encoders = {}
-for feature in features:
-    if df[feature].dtype == 'object':
-        le = LabelEncoder()
-        le.fit(possible_values[feature])
-        df[feature] = le.transform(df[feature])
-        label_encoders[feature] = le
 
 # Standardize the features
 scaler = StandardScaler()
 X_scaled = scaler.fit_transform(df[features])
 
 # Fit the KMeans model
-kmeans = KMeans(n_clusters=5, random_state=42)  # Adjusted n_clusters to match the sample size
-df['predicted_bin'] = kmeans.fit_predict(X_scaled) + 1  # Adjust bin range to be from 1 to 10
+kmeans = KMeans(n_clusters=10, random_state=42)  # Adjusted n_clusters to 10
+df['cluster'] = kmeans.fit_predict(X_scaled)  # Use cluster labels directly
 
-# Function to predict the bin for new data
-def predict_bin(new_data):
+# Function to predict the cluster for new data
+def predict_cluster(new_data):
+    # Apply label encoding to user input data
     for feature in features:
-        if feature in label_encoders:
-            new_data[feature] = label_encoders[feature].transform(new_data[feature])
+        if feature != 'cvssv3':
+            le = LabelEncoder()
+            new_data[feature] = le.fit_transform(new_data[feature])
     new_data_scaled = scaler.transform(new_data[features])
-    return kmeans.predict(new_data_scaled) + 1  # Adjust bin range to be from 1 to 10
+    return kmeans.predict(new_data_scaled)
 
 # Streamlit app
 st.title("KMeans Clustering Prediction and Data Visualization")
@@ -65,14 +43,14 @@ st.title("KMeans Clustering Prediction and Data Visualization")
 user_input = {}
 user_input['report'] = st.text_area("Enter report:")  # Add a text area for the report
 user_input['cvssv3'] = st.number_input("Enter value for cvssv3:", min_value=0.0, max_value=10.0, step=0.1)
-user_input['attackvector'] = st.selectbox("Select value for attackvector:", possible_values['attackvector'])
-user_input['attackcomplexity'] = st.selectbox("Select value for attackcomplexity:", possible_values['attackcomplexity'])
-user_input['privilegesrequired'] = st.selectbox("Select value for privilegesrequired:", possible_values['privilegesrequired'])
-user_input['userinteraction'] = st.selectbox("Select value for userinteraction:", possible_values['userinteraction'])
-user_input['scope'] = st.selectbox("Select value for scope:", possible_values['scope'])
-user_input['confidentialityimpact'] = st.selectbox("Select value for confidentialityimpact:", possible_values['confidentialityimpact'])
-user_input['integrityimpact'] = st.selectbox("Select value for integrityimpact:", possible_values['integrityimpact'])
-user_input['availabilityimpact'] = st.selectbox("Select value for availabilityimpact:", possible_values['availabilityimpact'])
+user_input['attackvector'] = st.selectbox("Select value for attackvector:", ['NETWORK', 'ADJACENT', 'LOCAL', 'PHYSICAL'])
+user_input['attackcomplexity'] = st.selectbox("Select value for attackcomplexity:", ['LOW', 'HIGH'])
+user_input['privilegesrequired'] = st.selectbox("Select value for privilegesrequired:", ['NONE', 'LOW', 'HIGH'])
+user_input['userinteraction'] = st.selectbox("Select value for userinteraction:", ['NONE', 'REQUIRED'])
+user_input['scope'] = st.selectbox("Select value for scope:", ['UNCHANGED', 'CHANGED'])
+user_input['confidentialityimpact'] = st.selectbox("Select value for confidentialityimpact:", ['NONE', 'LOW', 'HIGH'])
+user_input['integrityimpact'] = st.selectbox("Select value for integrityimpact:", ['NONE', 'LOW', 'HIGH'])
+user_input['availabilityimpact'] = st.selectbox("Select value for availabilityimpact:", ['NONE', 'LOW', 'HIGH'])
 
 # Convert user input to DataFrame
 new_data = pd.DataFrame([user_input])
@@ -80,29 +58,18 @@ new_data = pd.DataFrame([user_input])
 # Remove the 'report' column from new_data before prediction
 new_data = new_data.drop(columns=['report'])
 
-# Predict the bin for the user input
+# Predict the cluster for the user input
 if st.button("Predict Threat score level"):
-    predicted_bins = predict_bin(new_data)
-    st.write(f"Predicted Threat score level: {predicted_bins[0]}")
-
-# Clustering visualization
-st.title("Cluster Visualization")
+    predicted_clusters = predict_cluster(new_data)
+    st.write(f"Predicted Threat score level: {predicted_clusters[0]}")
 
 # Sidebar for plot selection
 st.sidebar.title("Visualization Options")
-plot_type = st.sidebar.selectbox("Select plot type:", ["Cluster Plot", "Histogram", "Correlation Heatmap", "Pair Plot"])
+plot_type = st.sidebar.selectbox("Select plot type:", ["Histogram", "Correlation Heatmap", "Pair Plot", "Cluster Plot"])
 selected_columns = st.sidebar.multiselect("Select columns to visualize:", df.columns.tolist())
 
 # Display the selected plot
-if plot_type == "Cluster Plot":
-    st.header("Cluster Plot")
-    fig, ax = plt.subplots()
-    sns.scatterplot(x='cvssv3', y='predicted_bin', hue='predicted_bin', data=df, palette='Set1', ax=ax)
-    ax.scatter(kmeans.cluster_centers_[:, 0], kmeans.cluster_centers_[:, 1], s=200, c='red', label='Centroids')
-    plt.legend()
-    st.pyplot(fig)
-
-elif plot_type == "Histogram":
+if plot_type == "Histogram":
     st.header("Histogram")
     for col in selected_columns:
         st.subheader(f"Histogram for {col}")
@@ -127,3 +94,12 @@ elif plot_type == "Pair Plot":
         st.pyplot(fig)
     else:
         st.warning("Please select at least two columns for the pair plot.")
+
+elif plot_type == "Cluster Plot":
+    st.header("Cluster Plot")
+    if len(selected_columns) == 2:
+        fig, ax = plt.subplots()
+        sns.scatterplot(data=df, x=selected_columns[0], y=selected_columns[1], hue='cluster', palette='viridis', ax=ax)
+        st.pyplot(fig)
+    else:
+        st.warning("Please select exactly two columns for the cluster plot.")
