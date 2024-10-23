@@ -23,7 +23,7 @@ scaler = StandardScaler()
 X_scaled = scaler.fit_transform(df[features])
 
 # Fit the KMeans model
-kmeans = KMeans(n_clusters=10, random_state=42)  # Adjusted n_clusters to 10
+kmeans = KMeans(n_clusters=5, random_state=42)  # Adjusted n_clusters to 5
 df['cluster'] = kmeans.fit_predict(X_scaled)  # Use cluster labels directly
 
 # Function to predict the cluster for new data
